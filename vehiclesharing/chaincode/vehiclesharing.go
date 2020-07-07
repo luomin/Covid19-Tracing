@@ -19,6 +19,7 @@ import (
 const OBJECTTYPE_JSON = "objectType"
 const OBJECTTYPE_VEHICLE = "VEHICLE"
 const OBJECTTYPE_LEASE = "LEASE"
+const OBJECTTYPE_GEODATA = "GEODATA"
 
 const PRIVATE_COLLECTION_LEASE = "leaseRecords"
 
@@ -34,7 +35,7 @@ type Vehicle struct {
 	ObjectType string  `json:"objectType"`
 	CreateTime int64   `json:"createTime"`
 	Id         string  `json:"id"`
-	Brand      string  `json:"brand"`
+	GPS      string  `json:"brand"`
 	Price      float64 `json:"price"`
 	OwnerId    string  `json:"ownerId"`
 	Status     int32   `json:"status"`
@@ -68,11 +69,13 @@ func (t *VehicleSharing) Invoke(stub shim.ChaincodeStubInterface) peer.Response 
 		// Vehicle functions
 		"createVehicle":         createVehicle,
 		"findVehicle":           findVehicle,
+		"findGeoDatabyRecordID":           findGeoDatabyRecordID,
 		"deleteVehicle":         deleteVehicle,
-		"updateVehiclePrice":    updateVehiclePrice,
+		"updateGpsDataPrice":    updateGpsDataPrice,
+        "updateGpsDataOwner":    updateGpsDataOwner,
 		"updateVehicleDynPrice": updateVehicleDynPrice,
 		"queryVehiclesByBrand":  queryVehiclesByBrand,
-		"queryVehicles":         queryVehicles,
+		"queryGeoData":         queryGeoData,
 		"getVehicleHistory":     getVehicleHistory,
 		"wronglyTxRandValue":    wronglyTxRandValue,
 		// Lease functions
@@ -99,54 +102,82 @@ func (t *VehicleSharing) Invoke(stub shim.ChaincodeStubInterface) peer.Response 
 }
 
 func createVehicle(stub shim.ChaincodeStubInterface, args []string) (string, error) {
-	// Id, Brand is required currently.
-	//var createtime int64
+        // Id, Brand is required currently
+        //var createtime int64
 
-	if len(args) < 2 {
-		return "", fmt.Errorf("There is not enough 2 arguments in this function createVehicle.")
-	}
-	var id = strings.TrimSpace(args[0])
-	var brand = strings.TrimSpace(args[1])
+        if len(args) < 2 {
+                return "", fmt.Errorf("There is not enough 2 arguments in this function createVehicle.")
+        }
 
-	var createtime int64;
-        var err error;
-        createtime, err = strconv.ParseInt(args[2], 10, 64)
+        var userId string
+        var gps string
+        userId = strings.TrimSpace(args[0])  // brand is user_id
+        gps = strings.TrimSpace(args[1])     // id is GEO Data
+
+        //var nanotime = time.Now().UnixNano()
+        var id string
+        var err error
+
+        id = strings.TrimSpace(args[2])
+
+        var createtime_string = time.Now().Format("20060102150505")
+
+        var createtime int64;
+        //var err error;
+        createtime, err = strconv.ParseInt(createtime_string, 10, 64)
         if err != nil {
               return "", err
         }
 
-	var v = Vehicle{ObjectType: OBJECTTYPE_VEHICLE, Id: id, Brand: brand, CreateTime: createtime}
-	return addVehicle(stub, &v)
+        var v = Vehicle{ObjectType: OBJECTTYPE_GEODATA, Id: id, UserId: userId, GPS: gps, CreateTime: createtime}
+
+        return addVehicle(stub, &v)
 }
 
 func addVehicle(stub shim.ChaincodeStubInterface, v *Vehicle) (string, error) {
-	//var res []byte
-	var err error
-	var jByte []byte
+        var res []byte
+        var err error
+        var jByte []byte
 
-	if v.Id == "" || v.Brand == "" {
-		return "", fmt.Errorf("The id and brand cannot be blank.")
-	}
+        if v.Id == "" || v. UserId == "" {
+                return "", fmt.Errorf("The id, UserId cannot be blank.")
+        }
 
-	//res, err = stub.GetState(v.Id)
-	//if err != nil {
-	//	return "", err
-	//} 
-	//else if res != nil {
-	//	return "", fmt.Errorf("The vehicle %s has already existed.", v.Id)
-	//}
+        res, err = stub.GetState(v.Id)
+        if err != nil {
+                return "", err
+        }else if res != nil {
+                return "", fmt.Errorf("The record Id %s has already existed.", v.Id)
+        }
 
-	jByte, err = json.Marshal(v)
-	if err != nil {
-		return "", err
-	}
-	err = stub.PutState(v.Id, jByte)
-	if err != nil {
-		return "", err
-	}
+        jByte, err = json.Marshal(v)
+        if err != nil {
+                return "", err
+        }
+        err = stub.PutState(v.Id, jByte)
+        if err != nil {
+                return "", err
+        }
 
-	return v.Id, nil
+        return v.Id, nil
 }
+
+# newly added
+func findGeoDatabyRecordID(stub shim.ChaincodeStubInterface, args []string) (string, error) {
+        if len(args) < 1 {
+                return "", fmt.Errorf("There is not enough 1 argument in this function findGeoDatabyRecordID.")
+        }
+        var id = strings.TrimSpace(args[0])
+        if id == "" {
+                return "", fmt.Errorf("The id cannot be blank.")
+        }
+        var res, err = stub.GetState(id)
+        if err != nil {
+                return "", fmt.Errorf("The record %s doesn't exist.", id)
+        }
+        return string(res), nil
+}
+
 
 // Find Vehicle by the state key (Id).
 func findVehicle(stub shim.ChaincodeStubInterface, args []string) (string, error) {
@@ -183,144 +214,123 @@ func deleteVehicle(stub shim.ChaincodeStubInterface, args []string) (string, err
 	return id, nil
 }
 
-func updateVehiclePrice(stub shim.ChaincodeStubInterface, args []string) (string, error) {
-	var res []byte
-	var err error
-	var v *Vehicle = new(Vehicle)
-	var price float64
-	var j []byte
+//newly added
+func updateGpsDataPrice(stub shim.ChaincodeStubInterface, args []string) (string, error) {
+        var res []byte
+        var err error
+        var v *Vehicle = new(Vehicle)
+        var price float64
+        var j []byte
 
-	// Id, Price is required currently.
-	if len(args) < 2 {
-		return "", fmt.Errorf("There is not enough 2 arguments in this function updateVehiclePrice.")
-	}
-	var id = strings.TrimSpace(args[0])
-	price, err = strconv.ParseFloat(args[1], 64)
-	if err != nil {
-		return "", err
-	}
+        // Id, Price is required currently.
+        if len(args) < 2 {
+                return "", fmt.Errorf("There is not enough 2 arguments in this function updateGpsDataPrice.")
+        }
+        var id = strings.TrimSpace(args[0])
+        price, err = strconv.ParseFloat(args[1], 64)
+        if err != nil {
+                return "", err
+        }
 
-	res, err = stub.GetState(id)
-	if err != nil {
-		return "", err
-	} else if res == nil {
-		return "", fmt.Errorf("The vehicle %s does not exist.", id)
-	}
+        res, err = stub.GetState(id)
+        if err != nil {
+                return "", err
+        } else if res == nil {
+                return "", fmt.Errorf("The Gpsdata %s does not exist.", id)
+        }
 
-	err = json.Unmarshal(res, v)
-	if err != nil {
-		return "", err
-	}
+        err = json.Unmarshal(res, v)
+        if err != nil {
+                return "", err
+        }
 
-	v.Price = price
+        v.Price = price
 
-	j, err = json.Marshal(v)
-	if err != nil {
-		return "", err
-	}
+        j, err = json.Marshal(v)
+        if err != nil {
+                return "", err
+        }
 
-	// Cannot use addVehicle.
-	err = stub.PutState(v.Id, j)
-	if err != nil {
-		return "", err
-	}
+        // Cannot use addVehicle.
+        err = stub.PutState(v.Id, j)
+        if err != nil {
+                return "", err
+        }
 
-	return v.Id, nil
+        return v.Id, nil
 }
 
-func updateVehicleDynPrice(stub shim.ChaincodeStubInterface, args []string) (string, error) {
-	var res []byte
-	var err error
-	var v *Vehicle = new(Vehicle)
-	var j []byte
 
-	// Id, Price is required currently.
-	if len(args) < 1 {
-		return "", fmt.Errorf("There is not enough 1 arguments in this function updateVehicleDynPrice.")
-	}
-	var id = strings.TrimSpace(args[0])
+// newly added
+func updateGpsDataOwner(stub shim.ChaincodeStubInterface, args []string) (string, error) {
+       var res []byte
+       var err error
+       var v *Vehicle = new(Vehicle)
+       var ownerID string
+       var j []byte
+       // Id, Price is required currently.
+       if len(args) < 2 {
+          return "", fmt.Errorf("There is not enough 2 arguments in this function updateGpsDataOwner.")
+       }
+       var id = strings.TrimSpace(args[0])
+       ownerID = strings.TrimSpace(args[1])
 
-	res, err = stub.GetState(id)
-	if err != nil {
-		return "", err
-	} else if res == nil {
-		return "", fmt.Errorf("The vehicle %s does not exist.", id)
-	}
+       /*
+       price, err = strconv.ParseFloat(args[1], 64)
+       if err != nil {
+              return "", err
+       }
+       */
+       res, err = stub.GetState(id)
+       if err != nil {
+              return "", err
+       } else if res == nil {
+              return "", fmt.Errorf("The Gpsdata %s does not exist.", id)
+       }
+       err = json.Unmarshal(res, v)
+       if err != nil {
+              return "", err
+       }
+       v.OwnerId = ownerID
 
-	err = json.Unmarshal(res, v)
-	if err != nil {
-		return "", err
-	}
+       j, err = json.Marshal(v)
+       if err != nil {
+              return "", err
+       }
 
-	// Update the price as original price * 2
-	v.Price = v.Price * 2
-
-	j, err = json.Marshal(v)
-	if err != nil {
-		return "", err
-	}
-
-	// Cannot use addVehicle.
-	err = stub.PutState(v.Id, j)
-	if err != nil {
-		return "", err
-	}
-
-	return v.Id, nil
+       // Cannot use addVehicle.
+       err = stub.PutState(v.Id, j)
+       if err != nil {
+              return "", err
+       }
+       return v.Id, nil
 }
 
-// The wronglyTxRandValue trying won't work, since the proposal response will be different on different chaincode env, for each execution.
-// Error: could not assemble transaction: ProposalResponsePayloads do not match - proposal response: version:1 response:<status:200 payload:"R294287" >...
-func wronglyTxRandValue(stub shim.ChaincodeStubInterface, args []string) (string, error) {
-	// Create a random value Vehicle.
-	var brandChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	var r = rand.New(rand.NewSource(time.Now().UnixNano()))
-	var id = "R" + strconv.FormatUint(r.Uint64(), 10)[0:6]
-	var p = r.Intn(len(brandChars) - 2)
-	var brand = brandChars[p : p+3]
 
-	var v Vehicle = Vehicle{
-		ObjectType: OBJECTTYPE_VEHICLE,
-		Id:         id,
-		Brand:      brand,
-		Price:      r.Float64() * 1000.0}
 
-	return addVehicle(stub, &v)
+# newly added
+func queryGeoData(stub shim.ChaincodeStubInterface, args []string) (string, error) {
+        if len(args) < 1 {
+                return "", fmt.Errorf("There is at least one query.")
+        }
+        var query = strings.TrimSpace(args[0])
+        if query == "" {
+                return "", fmt.Errorf("The query string cannot be blank.")
+        }
+        log.Printf(query)
+
+        // There should be only 1 query string.
+        var stateIterator shim.StateQueryIteratorInterface
+        var err error
+
+        stateIterator, err = stub.GetQueryResult(query)
+        if err != nil {
+                return "", err
+        }
+        defer stateIterator.Close()
+        return joinKVList(stateIterator)
 }
 
-func queryVehiclesByBrand(stub shim.ChaincodeStubInterface, args []string) (string, error) {
-	if len(args) < 1 {
-		return "", fmt.Errorf("There should be at least one arg of queryVehiclesByBrand.")
-	}
-	// There should be only 1 arg for brand.
-	var brand = strings.TrimSpace(args[0])
-	if brand == "" {
-		return "", fmt.Errorf("The brand cannot be blank.")
-	}
-	return queryVehicles(stub, []string{fmt.Sprintf(`{"selector":{"%s":"%s","brand":"%s"}}`, OBJECTTYPE_JSON, OBJECTTYPE_VEHICLE, brand)})
-}
-
-func queryVehicles(stub shim.ChaincodeStubInterface, args []string) (string, error) {
-	if len(args) < 1 {
-		return "", fmt.Errorf("There is at least one query.")
-	}
-	var query = strings.TrimSpace(args[0])
-	if query == "" {
-		return "", fmt.Errorf("The query string cannot be blank.")
-	}
-	log.Printf(query)
-
-	// There should be only 1 query string.
-	var stateIterator shim.StateQueryIteratorInterface
-	var err error
-
-	stateIterator, err = stub.GetQueryResult(query)
-	if err != nil {
-		return "", err
-	}
-	defer stateIterator.Close()
-	return joinKVList(stateIterator)
-}
 
 func joinKVList(stateIterator shim.StateQueryIteratorInterface) (string, error) {
 	var resList []string
@@ -335,106 +345,6 @@ func joinKVList(stateIterator shim.StateQueryIteratorInterface) (string, error) 
 	return "[" + strings.Join(resList, ",") + "]", nil
 }
 
-func getVehicleHistory(stub shim.ChaincodeStubInterface, args []string) (string, error) {
-	if len(args) < 1 {
-		return "", fmt.Errorf("There is at least one arg for getVehicleHistory.")
-	}
-	var historyIterator shim.HistoryQueryIteratorInterface
-	var err error
-	var id = strings.TrimSpace(args[0])
-	if id == "" {
-		return "", fmt.Errorf("The id cannot be blank.")
-	}
-
-	historyIterator, err = stub.GetHistoryForKey(id)
-	if err != nil {
-		return "", err
-	}
-	defer historyIterator.Close()
-	return joinKMList(historyIterator)
-}
-
-func joinKMList(histIterator shim.HistoryQueryIteratorInterface) (string, error) {
-	var resList []string
-	var jByte []byte
-	for histIterator.HasNext() {
-		var km, err = histIterator.Next()
-		if err != nil {
-			return "", err
-		}
-		jByte, err = json.Marshal(map[string]interface{}{
-			"TxId":      km.TxId,
-			"Timestamp": km.Timestamp,
-			"IsDelete":  km.IsDelete,
-			"Value":     km.Value})
-		if err != nil {
-			return "", err
-		}
-		resList = append(resList, string(jByte))
-	}
-	return "[" + strings.Join(resList, ",") + "]", nil
-}
-
-func createLease(stub shim.ChaincodeStubInterface, args []string) (string, error) {
-	// Id, Brand is required currently.
-	// Only for demo purpose, no any validation of existance of VehicleId, UserId.
-	if len(args) < 3 {
-		return "", fmt.Errorf("There is not enough 3 arguments in this function createLease.")
-	}
-	var id = strings.TrimSpace(args[0])
-	var vehicleId = strings.TrimSpace(args[1])
-	var userId = strings.TrimSpace(args[2])
-
-	var l = Lease{ObjectType: OBJECTTYPE_LEASE, Id: id, VehicleId: vehicleId, UserId: userId}
-	return addLease(stub, &l)
-}
-
-func addLease(stub shim.ChaincodeStubInterface, l *Lease) (string, error) {
-	var res []byte
-	var err error
-	var jByte []byte
-
-	if l.Id == "" || l.VehicleId == "" || l.UserId == "" {
-		return "", fmt.Errorf("The id, vehicleId and userId cannot be blank.")
-	}
-
-	res, err = stub.GetState(l.Id)
-	if err != nil {
-		return "", err
-	} else if res != nil {
-		return "", fmt.Errorf("The lease %s has already existed.", l.Id)
-	}
-
-	jByte, err = json.Marshal(l)
-	if err != nil {
-		return "", err
-	}
-
-	err = stub.PutPrivateData(PRIVATE_COLLECTION_LEASE, l.Id, jByte)
-	if err != nil {
-		return "", err
-	}
-
-	return l.Id, nil
-}
-
-// Find Lease by the state key (Id).
-func findLease(stub shim.ChaincodeStubInterface, args []string) (string, error) {
-	if len(args) < 1 {
-		return "", fmt.Errorf("There is not enough 1 argument in this function findLease.")
-	}
-	var id = strings.TrimSpace(args[0])
-	if id == "" {
-		return "", fmt.Errorf("The id cannot be blank.")
-	}
-
-	var res, err = stub.GetPrivateData(PRIVATE_COLLECTION_LEASE, id)
-	if err != nil {
-		return "", fmt.Errorf("The lease %s doesn't exist.", id)
-	}
-
-	return string(res), nil
-}
 
 func main() {
 	log.Printf("Begin to start the chaincode VehicleSharing")
