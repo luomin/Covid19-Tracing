@@ -40,40 +40,6 @@ switch (arg) {
 }
 */
 
-app.get('/api/queryVehicle/:record_id',async function queryFindVehicle(req, res) {
-//app.get('/api/querygeodatabyid/:record_id',async function queryFindVehicle(req, res) {
-    if (req.params.geodata_id == undefined) {
-        logger.info('Please speficy a geodata id for search.')
-        return;
-    }
-    //console.log(`Geo-ID: ${req.params.geodata_id}`);
-    //console.log(`User-ID: ${req.params.user_id}`);
-    const identityLabel = 'alice@sharing.en xample.com';
-    const wallet = await initUserWallet(identityLabel);
-    const gateway = new Gateway();
-
-    await gateway.connect(path.join(__dirname, './connprofile.json'),
-        {
-            wallet: wallet,
-            identity: identityLabel,
-            discovery: {
-				enabled: false,
-			}
-        });
-
-    logger.info('Gateway connects get succeed.');
-
-    const network = await gateway.getNetwork('vschannel');
-    const contract = await network.getContract('vehiclesharing');
-    //let result = await contract.evaluateTransaction('findGeoDatabyRecordID', req.params.geodata_id);
-    let result = await contract.evaluateTransaction('findVehicle', req.params.geodata_id);
-    gateway.disconnect();
-    res.status(200).json({response: result.toString()});
-    //result = Buffer.from(result).toString()
-    logger.info(result == '' ? req.params.geodata_id + ' not found' : result)
-});
-
-
 
 
 app.get('/api/querygeodatabyid/:user_id',async function queryGeoData(req, res) {
