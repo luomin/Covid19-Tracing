@@ -30,17 +30,6 @@ const {Gateway, FileSystemWallet, InMemoryWallet, X509WalletMixin} = require('fa
 
 var logger = new (winston.Logger)({transports: [new (winston.transports.Console)()]});
 
-/*
-let arg = process.argv[2];
-
-switch (arg) {
-    case 'query' : queryFindVehicle(process.argv[3]); break;
-    case 'add' : invokeAddVehicle(getRandomId(), 'FBC'); break;
-    default: logger.error(`Please run command likes: 'node vstest4.js query [id]' or 'node vstest4.js add'`);
-}
-*/
-
-
 
 app.get('/api/querygeodatabyid/:user_id',async function queryGeoData(req, res) {
 	
